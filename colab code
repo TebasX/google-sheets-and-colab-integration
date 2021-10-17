@@ -1,0 +1,45 @@
+import pandas as pd
+from matplotlib import pyplot
+from google.colab import auth
+auth.authenticate_user()
+
+import gspread
+from oauth2client.client import GoogleCredentials
+
+gc = gspread.authorize(GoogleCredentials.get_application_default())
+!pip install --upgrade gspread
+
+planilha_iot = gc.open('dados_IoT')
+worksheet_iot = planilha_iot.sheet1
+
+df_iot = pd.DataFrame(worksheet_iot.get_all_records())
+df_iot.head()
+
+df_iot = df_iot.drop(labels=['id ','hora'],axis=1,inplace=False)
+df_iot.columns= ["ds","y"]
+df_iot["ds"]= pd.to_datetime(df_iot.ds)
+df_iot.head()
+
+from fbprophet import Prophet
+model =   Prophet()
+model.fit(df_iot)
+future= model.make_future_dataframe(periods=30)
+df_iot.tail()
+
+pred=model.predict(future)
+pred.tail(30)
+final = pred[["ds","yhat","yhat_lower","yhat_upper"]].tail(30)
+print(final)
+
+model.plot(pred)
+pyplot.show()
+
+from fbprophet.plot import plot
+plot(model, final, figsize=(23, 6))
+pyplot.show()
+
+previsoes = planilha_iot.worksheet("previsoes")
+final.columns= ["dia","temp", "temp superior", "temp inferior"]
+final['dia'] = final['dia'].dt.strftime('%d-%m-%y')
+
+previsoes.update([final.columns.values.tolist()] + final.values.tolist())
